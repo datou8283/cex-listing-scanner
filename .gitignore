@@ -1,0 +1,27 @@
+# Per-run outputs (canonical state lives under ~/.claude/plugins/.${brand_id}-signals-state/;
+# these dirs only appear when an agent mirrors a report into the workspace for user view)
+reports/
+listing-reports/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Runtime state
+.state/
+
+# Backup / rollback
+*.bak
+*.bak.*
+.rollback-*.bak

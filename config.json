@@ -1,0 +1,13 @@
+{
+  "brand_id": "aster",
+  "brand_name": "Aster DEX",
+  "source_cex": {
+    "name": "Binance",
+    "base_url": "https://fapi.binance.com"
+  },
+  "target_cex": {
+    "name": "Aster",
+    "base_url": "https://fapi.asterdex.com",
+    "shrink_abort_ratio": 0.5
+  }
+}

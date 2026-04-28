@@ -1,0 +1,9 @@
+{
+  "name": "cex-listing-scanner",
+  "version": "0.1.0",
+  "description": "Scan listing opportunities for a target CEX — intersect Binance Square trending heat with (source-CEX has perp ∩ target-CEX doesn't). Brand-agnostic — config-driven source/target pair.",
+  "author": {
+    "name": "Danny"
+  },
+  "keywords": ["cex", "listing", "perp", "binance", "binance-square", "monitoring", "trading"]
+}
