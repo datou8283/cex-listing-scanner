@@ -87,12 +87,36 @@ Then summarize back to user (≤250 words):
 - State file at `$CEX_LISTING_SCANNER_STATE_PATH` updated with current source/target snapshot + new-listing timers.
 - Top 5 opportunities each have combined_score, mentions, hours_since_listing.
 
-## Failure handling
+## Failure handling — STRICT decision tree
 
-- Source CEX API failure → abort scan, partial JSON written with `errors[]`.
-- Target CEX API failure → abort (don't emit false positives — every coin would look "missing").
-- Target list shrink >`shrink_abort_ratio` → abort, log "manual confirm + clear_state() then re-run".
-- Square scraper failure → abort scan (no social heat = no candidates).
+The scanner has 3 data sources (source CEX API, target CEX API, Binance Square scraper) and intentionally aborts rather than emitting false positives. **Read this list and follow it literally — don't shortcut into auto-retry or partial-data emit.**
+
+### Built-in aborts (inside `listing_scanner.py` / `listing_opps.py`)
+
+1. **Source CEX API 4xx/5xx/timeout** → `_get_tradable_symbols` returns `None` → `scan()` aborts and returns `[]`. JSON is written with `errors=[{stage: 'find_listing_opportunities', ...}]`. Final report has 0 opportunities.
+2. **Target CEX API 4xx/5xx/timeout** → same — abort. **DO NOT** treat this as "target has 0 listings" (every source coin would falsely look missing).
+3. **Target list shrink > `shrink_abort_ratio`** (default 0.5) → abort with explicit `ERROR` log. Defends against API returning 200 OK with truncated/wrong data.
+4. **First run with no state file** → auto-init: snapshot baselines, return `[]`. NOT a failure. Next run starts producing real opportunities.
+5. **No source-only coins this run** (target caught up, or no diff) → return `[]` with `errors=[]`. NOT a failure. Write empty report normally.
+
+### Hard failures the agent must handle
+
+6. **`square_scraper.py` ImportError on playwright** → no social heat. Tell the user once: "Square heat ranking requires playwright. Run `pip install playwright && python -m playwright install chromium`." Then write partial JSON with `errors=[{stage: 'playwright-missing', ...}]`. **Do NOT auto-install. Do NOT retry.**
+7. **Square scraper returns 0 mentions but no exception** → `find_listing_opportunities` logs WARNING and returns `[]`. The scanner output is empty — distinguish "no social heat data" vs "social heat had no overlap with source-only" in the summary to user.
+8. **Shrink-abort triggered** → user must investigate (target API returning bad data?). Do NOT auto-clear state and retry — the abort is the correct behavior. Tell user to verify the target CEX is healthy and run `python3 -c "from listing_scanner import ListingScanner; ls = ListingScanner(...); ls.clear_state()"` only after confirming.
+
+### Common shortcut bugs to avoid
+
+- ❌ "Source CEX 5xx, retry" → the scanner does not auto-retry network errors at the entry level. Don't manually retry inline; let the next scheduled run handle it.
+- ❌ "Target API down, skip target check and just emit source list" → WRONG. The scanner aborts on this exact scenario for a reason. False positives are very expensive (a listing PM could ticket 200+ coins as "missing").
+- ❌ "0 opportunities, write partial-run with stage=no-results" → WRONG. 0 opportunities + `errors=[]` is a valid normal-run outcome. Write the report normally and tell user "no candidates this cycle" without alarm.
+- ❌ "Shrink-abort triggered, auto clear_state() and retry" → WRONG. The abort exists precisely because the target API is misbehaving — clearing state would lose dedup history without addressing the root cause.
+
+### Recovery
+
+- Source/target CEX failures → next scheduled run picks up cleanly. State file is unchanged on failed runs (no symbols overwritten).
+- Shrink-abort → manual: confirm target CEX is healthy via `curl <target_base_url>/fapi/v1/exchangeInfo | jq '.symbols | length'`, then `clear_state()` if needed.
+- playwright-missing → install once, then re-run.
 
 ## Configuration
 
